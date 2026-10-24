@@ -1,0 +1,47 @@
+# 本地运行状态
+.longrun/
+pending_checkpoint.json
+
+# 记忆库数据（绝不入库）
+*.db
+*.db-wal
+*.db-shm
+data/
+raw_data/
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+.venv/
+venv/
+env/
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+.coverage
+htmlcov/
+*.egg-info/
+build/
+dist/
+
+# 备份与临时文件
+.backups/
+BUG_DESCRIPTION.md
+*.tmp
+*.bak
+*.log
+
+# 环境与密钥
+.env
+.env.*
+*.pem
+credentials.enc
+ACCOUNTS.local.md
+
+# 编辑器 / 系统
+.idea/
+.vscode/
+.DS_Store
+Thumbs.db
+desktop.ini

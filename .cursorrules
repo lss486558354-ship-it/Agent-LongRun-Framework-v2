@@ -1,0 +1,67 @@
+# Agent-LongRun-Framework
+
+本项目的 Agent 必须同时受「状态机」和「记忆路由」约束。
+细则见 `rules/`，技能见 `skills/auto-dev-workflow/SKILL.md`。
+
+## 项目边界（v0.2）
+
+- 一个任务绑定一个项目根：`LongRunAgent(root=项目根)`
+- 状态在 `<项目根>/.longrun/`，记忆在 `<项目根>/memory.db` 与 `raw_data/`
+- MCP 后端必须带 `--project_path <项目根>`
+- 禁止把当前项目的断点写到别的项目记忆库
+
+## 铁律一：先查记忆
+
+在**处理任何长任务**或**涉及历史代码修改**时，**必须先调用 `search_memory` 检索相关上下文**。
+
+- 关键词取 2–4 个实义词，中英文都保留
+- 先看摘要，最相关的 1–2 条再用 `read_raw_data` 取原文
+- 记忆服务报错时不得假装「没有历史」，必须停下并说明
+- 使用 Python 胶水层时，`LongRunAgent.start_task()` 已内置这一步
+
+## 铁律二：先写记忆，再输出断点
+
+在**完成一个执行阶段**或**触发中断（如 token 预警）**时，**必须先调用 `save_memory` 存入当前进度和关键决策，然后再输出断点信息**。
+
+顺序固定为：
+
+1. 生成结构化断点（含单行机器标记 `<!-- longrun-state: {...} -->`）
+2. `save_memory` 成功，拿到 memory_id
+3. 更新状态机并落盘
+4. 才输出断点文本
+
+写入失败 → 不输出断点，落 `.longrun/pending_checkpoint.json`，明确告知用户。
+禁止「先口头断点，回头再补」。
+
+## 读写门禁
+
+- 新任务默认 `read_only`：只能读、查、分析
+- 方案确认后调用 `enable_writes(原因)` 解锁；原因会记入 history
+- 每次写操作前 `require_writable(动作)`
+- 回到调研/等待确认时 `disable_writes(原因)`
+- 写操作包括：改文件、删除、`git commit/push`、装依赖、有副作用的外部请求
+
+## 状态机
+
+```text
+pending → in_progress → {paused, blocked, waiting_verification, completed, failed}
+paused/blocked/waiting_verification → in_progress
+completed / failed 为终态
+```
+
+- 非法流转必须失败，不允许跳状态
+- 已有未完成任务时禁止 `start_task` 覆盖，先 `resume()` 或 `finish()`
+- 状态文件损坏必须报错，不能当成「没有任务」
+
+## 恢复
+
+- 中断后：`search_memory` 找 `[断点]` 记录 → `read_raw_data` → `LongRunAgent.resume()` / `recover_from_memory()`
+- 恢复后先核对 `next_step` 与已完成步骤，再继续执行
+- 详细 SOP：`skills/auto-dev-workflow/SKILL.md` 的 `interrupted-task-recovery`
+
+## 禁止
+
+- 把「未检索到」当成「不存在」
+- 把断点只留在聊天记录里
+- 在只读模式下修改任何文件
+- 用自然语言声称状态已切换，实际没有调用状态机
